@@ -1,6 +1,6 @@
 from mininet.topo import Topo
 from mininet.net import Mininet
-from mininet.util import dumpNodeConnections,quietRun
+from mininet.util import dumpNetConnections,quietRun,custom
 from mininet.log import setLogLevel
 import argparse
 from numbers import Number
@@ -9,18 +9,19 @@ from subprocess import Popen
 import os
 from time import time,sleep
 from mininet.cli import CLI
+from mininet.link import TCLink
 class LinearTopo(Topo):
     '''
-    Linear Topology of n hosts and n switches, with one host each switch
+    Linear Topology of k hosts and k switches, with one host each switch
     '''
-    def __init__(self,n,bw,delay,loss,**opts):
+    def __init__(self,n,bw=10,delay='10ms',loss=10,**opts):
         super(LinearTopo,self).__init__(**opts)
         self.n = n # there are n senders in the network
         receiver = self.addHost('receiver')
         last_switch = None
         senders = []
         switches = []
-        lconfig = {'bw': bw, 'delay': delay,'loss': loss }
+        lconf = {'bw':bw,'delay':delay,'loss':loss}
         for i in range(self.n):
             host_name = 'h{}'.format(str(i+1))
             switch_name = 's{}'.format(str(i+1))
@@ -28,9 +29,9 @@ class LinearTopo(Topo):
             switch = self.addSwitch(switch_name)
             senders.append(host)
             switches.append(switch)
-            self.addLink(host,switch,**lconfig)
+            self.addLink(host,switch,**lconf)
             if last_switch:   # if there is a previous switch, then add link
-                self.addLink(switch,last_switch,**lconfig)
+                self.addLink(switch,last_switch,**lconf)
             last_switch = switch
         # wire up the receiver to the first swtich
         self.addLink(receiver,switches[0])
@@ -53,6 +54,7 @@ def monitor_devs_ng(fname, interval_sec=0.01):
 def check_prereqs():
     "Check for necessary programs"
     prereqs = ['telnet', 'bwm-ng', 'iperf', 'ping']
+    # bwm-ng if for testing bandwidth
     for p in prereqs:
         if not quietRun('which ' + p):
             raise Exception((
@@ -86,7 +88,7 @@ def run_linear_topology_test(net,args):
     start_tcpprobe(args)
     recvr = net.getNodeByName('receiver')
     # the port_num is the port number server waiting for
-    port_num = 2048
+    port = 2048
     recvr.cmd('iperf -s -p', port, '> %s/iperf_server.txt' % args.folder, '&')
     h = [] # Python list of clients
     for i in range(n):
@@ -112,15 +114,17 @@ if __name__=='__main__':
     check_prereqs()
     parser = argparse.ArgumentParser(description='Linear Topology Test')
     parser.add_argument('--n','-n',required=True,type=int,help='the number of hosts')
-    parser.add_argument('--bandwidth','-b',default=10,type=Number,help='the bandwidth of the link')
+    parser.add_argument('--bandwidth','-b',default=10,type=int,help='the bandwidth of the link')
     parser.add_argument('--delay','-d',default='10ms',type=str,help='the delay in the link')
-    parser.add_argument('--loss','-l',default=10,type=Number,help='the loss rate in the link')
+    parser.add_argument('--loss','-l',default=10,type=int,help='the loss rate in the link')
     parser.add_argument('--folder', '-f',help="folder to store outputs",default="results")
     args=parser.parse_args()
     if not os.path.exists(args.folder):
         os.mkdir(args.folder)
-    topo = LinearTopo(args.n,args.bandwidth,args.delay,args.loss)
-    net = Mininet(topo=topo)
+    lconf = {'bw':args.bandwidth,'delay':args.delay,'loss':args.loss}
+    link = custom(TCLink,bw=args.bandwidth,delay=args.delay,loss=args.loss)
+    topo = LinearTopo(args.n,**lconf)
+    net = Mininet(topo=topo,link=link)
     net.start()
     print('---------------------NODE CONNECTIONS---------------------------------------------')
     CLI(net)
