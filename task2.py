@@ -1,7 +1,7 @@
 from mininet.topo import Topo
 from mininet.net import Mininet
 from mininet.util import dumpNetConnections,quietRun,custom
-from mininet.log import setLogLevel
+from mininet.log import setLogLevel,output,lg
 import argparse
 from numbers import Number
 from multiprocessing import Process
@@ -10,6 +10,7 @@ import os
 from time import time,sleep
 from mininet.cli import CLI
 from mininet.link import TCLink
+from util.monitor import monitor_devs_ng
 class LinearTopo(Topo):
     '''
     Linear Topology of k hosts and k switches, with one host each switch
@@ -36,8 +37,8 @@ class LinearTopo(Topo):
         # wire up the receiver to the first swtich
         self.addLink(receiver,switches[0])
 
-def start_tcpprobe(args,port):
-    os.system("rmmod tcp_probe 1>/dev/null 2>&1; modprobe tcp_probe port={}".format(str(port)))
+def start_tcpprobe(args):
+    os.system("rmmod tcp_probe 1>/dev/null 2>&1; modprobe tcp_probe")
     Popen("cat /proc/net/tcpprobe > %s/tcp_probe.txt" % args.folder, shell=True)
 
 def stop_tcpprobe():
@@ -45,7 +46,7 @@ def stop_tcpprobe():
 
 def check_prereqs():
     "Check for necessary programs"
-    prereqs = ['telnet', 'iperf', 'ping']
+    prereqs = ['telnet', 'iperf', 'ping','bwm-ng']
     # bwm-ng if for testing bandwidth
     for p in prereqs:
         if not quietRun('which ' + p):
@@ -75,28 +76,36 @@ def run_linear_topology_test(net,args):
 
     n = args.n
     port = 2048
-    start_tcpprobe(args，port)
+    monitor = Process(target=monitor_devs_ng,
+                      args=('%s/bwm.txt' % args.folder, 1.0))
+    monitor.start()
+    start_tcpprobe(args)
     recvr = net.getNodeByName('receiver')
     # the port_num is the port number server waiting for
-    recvr.cmd('iperf -s -p', port, '> %s/iperf_server.txt' % args.folder, '&')
+    recvr.cmd('iperf -s -p %s > %s/iperf_server.txt' % (port,args.folder) + '&')
     h = [] # Python list of clients
     for i in range(n):
         h.append( net.getNodeByName('h%s' % (i+1)) )
-    for i in range(n):
-        waitListening(h[i], recvr, port)
+    waitListening(h[0], recvr, port)
      # send iperf cmd to all hosts
     for i in range(n):
         node_name = 'h%s' % (i+1)
-        h[i].sendCmd('iperf -c %s -p %s -i 1  > %s/iperf_%s.txt' % (recvr.IP(), port, args.folder, node_name))
+        h[i].sendCmd('iperf -c %s -p %s -i 1 -Z reno -yc > %s/iperf_%s.txt' % (recvr.IP(), port, args.folder, node_name))
 
     # wait for commands to finish
     iperf_results = {}
     for i in range(n):
         iperf_results[h[i].name] = h[i].waitOutput()
     recvr.cmd('kill %iperf')
+    monitor.terminate()
     stop_tcpprobe()
 
 if __name__=='__main__':
+    '''
+    For varying the bandwidth: we will use 20
+    For varying the delay: we will use 5ms
+    For varing the loss rate: we will use 2% loss
+    '''
     check_prereqs()
     parser = argparse.ArgumentParser(description='Linear Topology Test')
     parser.add_argument('--n','-n',required=True,type=int,help='the number of hosts')
@@ -120,5 +129,6 @@ if __name__=='__main__':
     net.pingAll()
     run_linear_topology_test(net,args)
     net.stop()
-    os.system('killall -9 bwm-ng')
+    os.system("killall -9 bwm-ng")
+
     print('---------------------TEST FINISHED------------------------------------------------')
