@@ -15,8 +15,8 @@ class LinearTopo(Topo):
     '''
     Linear Topology of k hosts and k switches, with one host each switch
     '''
-    def __init__(self,n,bw=10,delay='10ms',loss=10,**opts):
-        super(LinearTopo,self).__init__(**opts)
+    def __init__(self,n,bw=10,delay=None,loss=None,**opts):
+        Topo.__init__(self,**opts)
         self.n = n # there are n senders in the network
         receiver = self.addHost('receiver')
         last_switch = None
@@ -69,12 +69,15 @@ def waitListening(client, server, port):
         sleep(.5)
 
 
+
+
 def run_linear_topology_test(net,args):
     '''
     The function is for testing the linear Topology
     '''
 
     n = args.n
+    seconds = args.time
     port = 2048
     monitor = Process(target=monitor_devs_ng,
                       args=('%s/bwm.txt' % args.folder, 1.0))
@@ -90,7 +93,7 @@ def run_linear_topology_test(net,args):
      # send iperf cmd to all hosts
     for i in range(n):
         node_name = 'h%s' % (i+1)
-        h[i].sendCmd('iperf -c %s -p %s -i 1 -Z reno -yc > %s/iperf_%s.txt' % (recvr.IP(), port, args.folder, node_name))
+        h[i].sendCmd('iperf -c %s -p %s -t %d -i 1 -yc -Z reno> %s/iperf_%s.txt' % (recvr.IP(), port,seconds,args.folder, node_name))
 
     # wait for commands to finish
     iperf_results = {}
@@ -113,12 +116,14 @@ if __name__=='__main__':
     parser.add_argument('--delay','-d',default='0ms',type=str,help='the delay in the link')
     parser.add_argument('--loss','-l',default=0,type=int,help='the loss rate in the link')
     parser.add_argument('--folder', '-f',help="folder to store outputs",default="results")
+    parser.add_argument('--time', '-t',dest="time",type=int,help="Duration of the experiment.",default=60)
+
     args=parser.parse_args()
     if not os.path.exists(args.folder):
         os.mkdir(args.folder)
+    topo = LinearTopo(args.n)
     lconf = {'bw':args.bandwidth,'delay':args.delay,'loss':args.loss}
     link = custom(TCLink,bw=args.bandwidth,delay=args.delay,loss=args.loss)
-    topo = LinearTopo(args.n,**lconf)
     net = Mininet(topo=topo,link=link)
     net.start()
     print('---------------------NODE CONNECTIONS---------------------------------------------')
@@ -130,5 +135,7 @@ if __name__=='__main__':
     run_linear_topology_test(net,args)
     net.stop()
     os.system("killall -9 bwm-ng")
+    os.system("python util/plot_rate.py -f %s/bwm.txt --maxy %d --xlabel \'Time (s)\' --ylabel \'Rate (Mbps)\' -i \'s.*-eth2\' -o %s/rate.png" %(args.folder,args.bandwidth,args.folder))
+    os.system("python util/plot_tcpprobe.py -f %s/tcp_probe.txt -p 2048 -o %s/cwnd.png" %(args.folder,args.folder))
 
     print('---------------------TEST FINISHED------------------------------------------------')

@@ -2,9 +2,11 @@
 Server listening on TCP port 2048
 TCP window size: 85.3 KByte (default)
 ------------------------------------------------------------
-[  4] local 10.0.0.4 port 2048 connected with 10.0.0.1 port 48464
+[  4] local 10.0.0.4 port 2048 connected with 10.0.0.1 port 39652
 [ ID] Interval       Transfer     Bandwidth
 [  4]  0.0- 0.0 sec  0.00 Bytes  0.00 bits/sec
-[  5] local 10.0.0.4 port 2048 connected with 10.0.0.2 port 45946
-[  4] local 10.0.0.4 port 2048 connected with 10.0.0.1 port 48470
-[  6] local 10.0.0.4 port 2048 connected with 10.0.0.3 port 55982
+[  5] local 10.0.0.4 port 2048 connected with 10.0.0.2 port 39822
+[  4] local 10.0.0.4 port 2048 connected with 10.0.0.3 port 54294
+[  6] local 10.0.0.4 port 2048 connected with 10.0.0.1 port 39654
+[  6]  0.0-60.3 sec  20.9 MBytes  2.90 Mbits/sec
+[  5]  0.0-82.6 sec  4.38 MBytes   444 Kbits/sec
